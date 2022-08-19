@@ -15,7 +15,7 @@ public class TCPClient {
 
         Socket socket = null;
 
-        try{
+        try {
 
             socket = new Socket(host, port); 
 
@@ -66,6 +66,7 @@ public class TCPClient {
                     showMessage(serverMessage, 1);
 
                 } else if (serverMessage.equals(success)) {
+                    
                     check = false; 
                     break;
 
@@ -80,7 +81,7 @@ public class TCPClient {
 
             showIntro();           
 
-            while(!clientMessage.equals(".")){
+            while(!clientMessage.equals(".")) {
                 
                 System.out.print("Enter a value: ");                
                 clientMessage = br.readLine();     
@@ -99,7 +100,7 @@ public class TCPClient {
 
             }            
 
-        }catch (UnknownHostException e){
+        }catch (UnknownHostException e) {
             System.out.println("Sock:" + e.getMessage());
 
         } catch (EOFException e) {
@@ -122,7 +123,7 @@ public class TCPClient {
         }
     }
 
-    public void showIntro(){
+    public void showIntro() {
 
         System.out.println("\n\n------------------------------------\n");  
 
@@ -145,8 +146,10 @@ public class TCPClient {
     public void toTheServer(String clientMessage, DataOutputStream out) {
 
         try {
+
             out.writeUTF(clientMessage);                
             out.flush();
+
         } catch (IOException e) {
 
             System.out.println("Connection: " + e.getMessage());
