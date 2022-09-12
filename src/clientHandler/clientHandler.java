@@ -14,232 +14,302 @@ public class ClientHandler extends Thread {
     private DataOutputStream dataOutputStream;
     private Socket clientSocket;
     private String clientMessage, serverMessage;
-    private int spaceRequest;
-    private InetAddress ipAddress;
-    private boolean clientExist = false;
-    private static ArrayList<String> memory = new ArrayList<String>();
-    private final int MAINMEMORY = 10;
+    private InetAddress ip;
+    private final int TAM = 10;
+    private int space, amount, total_value_main_memory, total_swap_memory_value;
+    boolean loop;
+    private static ArrayList<String> memoria = new ArrayList<String>();
+    private static ArrayList<String> swap = new ArrayList<String>();
+    private static ArrayList<String> aux = new ArrayList<String>();
 
-    public ClientHandler (Socket socket) {
+    public ClientHandler(Socket socket) {
+
         try {
+
             clientSocket = socket;
             dataInputStream = new DataInputStream(clientSocket.getInputStream());
             dataOutputStream = new DataOutputStream(clientSocket.getOutputStream());
             clientMessage = "";
             serverMessage = "";
-            spaceRequest = 0;
-            ipAddress = clientSocket.getLocalAddress();
-            boolean check = true;
+            space = 0;
+            amount = 0;
+            total_value_main_memory = 0;
+            total_swap_memory_value = 0;
+            ip = clientSocket.getLocalAddress();
+            loop = true;
 
-            clientExist = clientAlreadyExists(memory, ipAddress, dataOutputStream);
-            
-            showAllocateMemory(memory);
-            availableMemoryServer(memory);
+            // duplicação de terminal/ip
+            clientAlreadyExists(memoria, ip, dataOutputStream);
 
-            if(memory.size() < MAINMEMORY) {
+            this.start();
 
-                availableMemoryClient(memory, dataOutputStream);
-
-                while(check) {
-
-                    toTheClient("How many memory spaces do you want to request? ", dataOutputStream);
-
-                    clientMessage = dataInputStream.readUTF();
-                    spaceRequest = requestMemory(clientMessage, ipAddress, dataOutputStream);
-                    
-                    if (spaceRequest > 0 && spaceRequest != -1){
-                        check = false; 
-                        break;
-                    }
-
-                }
-
-                if(memory.size() + spaceRequest <= MAINMEMORY ) {
-
-                    allocateInMemory(memory, spaceRequest, ipAddress);
-
-                    toTheClient("Success", dataOutputStream);
-
-                    System.out.println("Client " + ipAddress + ": connected!");                    
-                    availableMemoryServer(memory);
-
-                    this.start();
-
-                } else {
-
-                    if(clientExist) {
-                        errorLogs("A terminal is already being used by the client!", ipAddress);
-                    } else {
-                        errorLogs("There is not enough space for memory allocation!", ipAddress);
-                        toTheClient("There is not enough space for memory allocation!", dataOutputStream);
-                    }
-                    
-                }                
-                
-            } else {
-
-                if(clientExist) {
-                    errorLogs("A terminal is already being used by the client!", ipAddress);
-                } else {
-                    errorLogs("Memory full!", ipAddress);
-                    toTheClient("Server full memory, please try again later!", dataOutputStream);
-                }
-            }
-
-        } catch(IOException e) {
-            System.out.println("Client " + ipAddress + ": did not report space for memory allocation and exited!");
+        } catch (IOException e) {
         }
-    }    
+    }
 
     public void run() {
 
-        try {             
-            
-            while(!clientMessage.equals(".")) {
-                
+        try {
+
+            // testes(memoria, swap, out);
+
+            while (loop) {
+                // Quantidade de espaços de memória que o Cliente deseja alocar
+                toClient("How many memory spaces do you want to use? ", dataOutputStream);
                 clientMessage = dataInputStream.readUTF();
+                // Verifica se o valor é válido para alocação de memória
+                space = requestMemory(clientMessage, ip, dataOutputStream);
 
-                if (clientMessage.equals(".")) {
+                if (space > 0 && space <= TAM)
+                    loop = false;
+            }
 
-                    break;
+            // Calcula a quantidade de memória total
+            amount = memoria.size() + space;
+            // Calcula a quantidade de memória que vai para a memória swap
+            total_swap_memory_value = amount - TAM;
+            // Calcula a quantidade de memória que vai para a memória principal
+            total_value_main_memory = space - total_swap_memory_value;
 
+            // Verifica se há espaço suficiente para a alocação na memória principal
+            if (amount <= TAM) {
+                // Aloca os espaços de memória que o Cliente informou
+                allocateInMemory(memoria, space, ip);
+                // Informa o Servidor
+                logs("Initiated", "\n", ip);
+                // Informa o Cliente
+                toClient("Sucesso", dataOutputStream);
+
+            } else if (memoria.size() < TAM) {// Servidor com memória principal está com pouco espaço de armazenamento
+                // Aloca uma parte do espaço de memoria que o Cliente informou na memória
+                // principal
+                allocateInMemory(memoria, total_value_main_memory, ip);
+                // Aloca os espaços de memória que o Cliente informou na memória SWAP
+                allocateInMemory(swap, total_swap_memory_value, ip);
+                // Informa ao Servidor sobre a alocação de espaços de memória SWAP
+                logs("Started - Running Partially",
+                        "\n     - Cause: Not enough space in main memory, Client tasks moved to SWAP memory\n",
+                        ip);
+                toClient("Sucesso", dataOutputStream);
+
+            } else {// Servidor com memória principal cheia
+                    // Aloca os espaços de memória que o Cliente informou na memória SWAP
+                allocateInMemory(swap, space, ip);
+                // Informa ao Servidor sobre a alocação de espaços de memória SWAP
+                logs("Waiting",
+                        "\n     - Cause: Not enough space in main memory, Client moved to SWAP memory\n",
+                        ip);
+                // Informa o Cliente sobre alocação de memória na SWAP
+                toClient("Server full! waiting in line ...", dataOutputStream);
+            }
+
+            testes(memoria, swap, dataOutputStream);
+
+            // loop para verificar se já pode sair dá fila, caso Cliente esteja
+            loop = false;
+            while (!loop) {
+                // Ip/Cliente está na memória princial
+                if (memoria.contains(String.valueOf(ip))) {
+
+                    toClient("show", dataOutputStream);
+
+                    while (!clientMessage.equals(".")) {
+                        // Recebe valor do Cliente
+                        clientMessage = dataInputStream.readUTF();
+                        // Se for . encerra o programa
+                        if (clientMessage.equals(".")) {
+                            break;
+                        }
+                    }
+
+                    loop = true;
+                    // Após o Cliente terminar suas tarefas, o Servidor desaloca a memória principal
+                    // e swap
+                    deallocateFromMemory(memoria, ip);
+                    deallocateFromMemory(swap, ip);
+                    // Transfere o Cliente da memória SWAP para a memória principal
+                    moveClientInSwapToMain(memoria, swap, aux, amount);
+                    testes(memoria, swap, dataOutputStream);
+
+                    // Ip/Cliente está na SWAP
+                } else {
+                    toClient("hide", dataOutputStream);
+                    // Pausa por 2 segundos a verificação para nao ocorrer travamentos da memoria ou
+                    // processamento
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                    }
                 }
 
-                toTheClient(serverMessage, dataOutputStream);
+            }
 
-            }   
-            
-            deallocateFromMemory(memory, ipAddress);            
+        } catch (EOFException e) {
+            // System.out.println("EOF: " + e.getMessage());
+            // Cliente informa o .
+            // Libera a memória por garantia
+            // Após o Cliente terminar suas tarefas, o Servidor desaloca a memória principal
+            // e swap
+            deallocateFromMemory(memoria, ip);
+            deallocateFromMemory(swap, ip);
+            // Transfere o Cliente da memória SWAP para a memória principal
+            moveClientInSwapToMain(memoria, swap, aux, amount);
+            testes(memoria, swap, dataOutputStream);
 
-        } catch(EOFException e) {
-
-            deallocateFromMemory(memory, ipAddress);            
-
-        } catch(IOException e) {   
-
-            deallocateFromMemory(memory, ipAddress);
+        } catch (IOException e) {
+            // System.out.println("IO: " + e.getMessage());
+            // Cliente fechou o terminal!
+            // Libera a memória por garantia
+            // Após o Cliente terminar suas tarefas, o Servidor desaloca a memória principal
+            // e swap
+            deallocateFromMemory(memoria, ip);
+            deallocateFromMemory(swap, ip);
+            // Transfere o Cliente da memória SWAP para a memória principal
+            moveClientInSwapToMain(memoria, swap, aux, amount);
+            testes(memoria, swap, dataOutputStream);
 
         } finally {
+            // Libera a memória por garantia
+            // Após o Cliente terminar suas tarefas, o Servidor desaloca a memória principal
+            // e swap
+            deallocateFromMemory(memoria, ip);
+            deallocateFromMemory(swap, ip);
+            // Transfere o Cliente da memória SWAP para a memória principal
+            moveClientInSwapToMain(memoria, swap, aux, amount);
+            // Informa ao Servidor que o Cliente saiu
+            logs("It went out", "", ip);
+            testes(memoria, swap, dataOutputStream);
 
-            deallocateFromMemory(memory, ipAddress);
-            System.out.println("Client " + ipAddress + ": it went out!"); 
-            
             try {
+                // Fecha a Conexão do Cliente
                 clientSocket.close();
 
-            }catch (IOException e){
+            } catch (IOException e) {
+                /* close falhou */
             }
         }
     }
 
-    public boolean clientAlreadyExists(ArrayList<String> memory, InetAddress ipAddress, DataOutputStream dataOutputStream) {
+    private void testes(ArrayList<String> memoria, ArrayList<String> swap, DataOutputStream out) {
 
-        int p;
-        p = memory.indexOf(String.valueOf(ipAddress));
-        boolean clientExist = false;
+        // Mostra os espaços alocados na memória princial e na swap
+        showAllocateMemory(memoria, "Main");
+        showAllocateMemory(swap, "SWAP");
 
-        if(p != -1){
-            clientExist = true;
-            toTheClient("A terminal is already being used by the client!", dataOutputStream);
-        }
+        // Verifica memória principal disponivel
+        availableMemory(memoria, out);
 
-        return clientExist;
     }
 
-    public int requestMemory(String clientMessage, InetAddress ipAddress, DataOutputStream dataOutputStream) {
+    private void moveClientInSwapToMain(ArrayList<String> memoria, ArrayList<String> swap, ArrayList<String> aux,
+            int amount) {
 
-        int spaceRequest;
+        // Calculo de quanto sobrou na memoria principal
+        amount = TAM - memoria.size();
+
+        if (amount > swap.size())
+            amount = swap.size();
+
+        // Armazena os ips em uma lista auxiliar
+        for (int i = 0; i < amount; i++)
+            aux.add(String.valueOf(swap.get(i)));
+
+        // Aloca memória da SWAP na memória principal
+        for (int i = 0; i < amount; i++)
+            memoria.add(String.valueOf(aux.get(i)));
+
+        // Desaloca memória da SWAP
+        for (int i = 0; i < amount; i++)
+            swap.remove(String.valueOf(aux.get(i)));
+
+        // Limpa memória do auxiliar
+        aux.clear();
+    }
+
+    public void clientAlreadyExists(ArrayList<String> memoria, InetAddress ip, DataOutputStream dataOutputStream) {
+
+        if (memoria.indexOf(String.valueOf(ip)) != -1)
+            toClient("A terminal is already being used by the Client!", dataOutputStream);
+
+    }
+
+    public void availableMemory(ArrayList<String> memoria, DataOutputStream dataOutputStream) {
+
+        int qtd = TAM - memoria.size();
+
+        if (qtd > 0) {
+            System.out.println(" *** Available Main Memory: " + qtd);
+            toClient("Available memory: " + qtd, dataOutputStream);
+        } else {
+            System.out.println(" *** No Main Memory Available!");
+            toClient("Server full, will need to wait in line!", dataOutputStream);
+        }
+    }
+
+    public int requestMemory(String clientMessage, InetAddress ip, DataOutputStream out) {
+
+        int space;
 
         try {
-            spaceRequest = toInt(clientMessage);           
-            
-            if(spaceRequest == 0) {
-                toTheClient("Enter a value greater than 0!", dataOutputStream);
-            } else if(spaceRequest > 0) {
-                System.out.println("Client " + ipAddress + ": requested " + spaceRequest + " memory spaces!");
-            }
+            space = toInt(clientMessage);
+
+            if (space > 0 && space <= TAM)
+                System.out.println(" ** " + "Client " + ip + ": requested " + space
+                        + " memory space(s) for allocating processes!");
+            else if (space < 0)
+                toClient("Please enter a valid value!", out);
+            else if (space == 0)
+                toClient("Enter a value greater than 0!", out);
+            else if (space > TAM)
+                toClient("Value exceeded limit! Enter only 1 to 10 memory space(s).", out);
 
         } catch (Exception e) {
-            spaceRequest = -1;
-            System.out.println("Client " + ipAddress + ": reported an invalid value!");
-            toTheClient("Please enter a valid value!", dataOutputStream);                  
+            space = -1;
+            toClient("Please enter a valid value!", out);
         }
 
-        return spaceRequest;
+        return space;
+    }
+
+    public void allocateInMemory(ArrayList<String> memoria, int space, InetAddress ip) {
+
+        for (int i = 0; i < space; i++)
+            memoria.add(String.valueOf(ip));
 
     }
 
-    public void allocateInMemory(ArrayList<String> memory, int spaceRequest, InetAddress ipAddress) {
+    public void deallocateFromMemory(ArrayList<String> memoria, InetAddress ip) {
 
-        for (int i = 0; i < spaceRequest; i++) {
-
-            memory.add(String.valueOf(ipAddress));
-
-        }
+        for (int i = memoria.size(); i >= 0; i--)
+            memoria.remove(String.valueOf(ip));
 
     }
 
-    public void deallocateFromMemory(ArrayList<String> memory, InetAddress ipAddress) {
-
-        for (int i = memory.size(); i >= 0; i--) {
-
-            memory.remove(String.valueOf(ipAddress));
-
-        }
-
-    }
-
-    public void showAllocateMemory(ArrayList<String> memory) {
-
-        for (int i = 0; i < memory.size(); i++) {
-
-            System.out.println(memory.get(i));
-
-        }
-
-    }
-
-    public void availableMemoryServer(ArrayList<String> memory) {
-
-        int amountOfMemory = MAINMEMORY - memory.size();
-
-        if(amountOfMemory > 0) {
-            System.out.println("Available memory: " + amountOfMemory);
-        } else {
-            System.out.println("No memory available!");
-        }   
-
-    }
-
-    public void availableMemoryClient(ArrayList<String> memory, DataOutputStream dataOutputStream) {
-
-        int qtd = MAINMEMORY - memory.size();
-        toTheClient("Available memory: " + qtd, dataOutputStream);
-
-    }
-
-    public void toTheClient(String serverMessage, DataOutputStream out){
+    public void toClient(String serverMessage, DataOutputStream out) {
 
         try {
-            out.writeUTF(serverMessage);                
+            out.writeUTF(serverMessage);
             out.flush();
         } catch (IOException e) {
-
         }
-
-    }
-    
-    public int toInt(String clientMessage2){
-
-        return Integer.parseInt(clientMessage); 
-
     }
 
-    public void errorLogs(String error, InetAddress ipAddress){
+    public int toInt(String clientMessage) {
+        return Integer.parseInt(clientMessage);
+    }
 
-        System.out.println("Client " + ipAddress + ": denied!"); 
-        System.out.println(error);
+    public void logs(String s, String m, InetAddress ip) {
+        System.out.println(" ** " + "Client " + ip + ": " + s + "!" + m);
+    }
 
+    public void showAllocateMemory(ArrayList<String> memoria, String tipo) {
+
+        System.out.println(" *** Memory " + tipo + "\n");
+
+        for (int i = 0; i < memoria.size(); i++)
+            System.out.println(memoria.get(i));
+
+        System.out.println();
     }
 
 }
