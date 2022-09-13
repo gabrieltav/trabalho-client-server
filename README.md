@@ -1,18 +1,20 @@
-## Getting Started
 
-Welcome to the VS Code Java world. Here is a guideline to help you get started to write Java code in Visual Studio Code.
+# Sistemas Distribuídos
 
-## Folder Structure
+## Equipe 1
 
-The workspace contains two folders by default, where:
+* Carlos Eduardo
+* Gabriel Tavares
+* Lucas Weslen
 
-- `src`: the folder to maintain sources
-- `lib`: the folder to maintain dependencies
+## Especificação do trabalho
 
-Meanwhile, the compiled output files will be generated in the `bin` folder by default.
+  1. O foco do sistema deve girar em torno de duas frentes: Cliente e Servidor;
+  2. O usuário deverá solicitar 5 espaços de memória;
+  3. Ao chegar no limite de espaço suficiente, essa informação será armazenada na SWAP;
+  4. Quando tiver espaço suficiente na memória principal, a SWAP mandará essas infomações novamente para serem armazenadas lá;
+  5. Critérios de funcionamento: o algoritmo deverá leva emconsideração o tamanho dos processos e a prioridade. O tempo poderá ser definido pela equipe.
 
-> If you want to customize the folder structure, open `.vscode/settings.json` and update the related settings there.
+A estrutura do trabalho descrito acima pode ser representada pela Figura 1 abaixo:
 
-## Dependency Management
-
-The `JAVA PROJECTS` view allows you to manage your dependencies. More details can be found [here](https://github.com/microsoft/vscode-java-dependency#manage-dependencies).
+![WhatsApp Image 2022-09-11 at 10 06 46 PM](https://user-images.githubusercontent.com/57644798/189792240-83e991d6-2a86-4dc3-97a6-03e1ca78e49e.jpeg)
